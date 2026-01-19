@@ -1,4 +1,4 @@
-const { Pool } = require('pg');
+const { Pool } = require("pg");
 
 // PostgreSQL connection pool configuration
 const pool = new Pool({
@@ -9,22 +9,24 @@ const pool = new Pool({
 });
 
 // Handle pool errors
-pool.on('error', (err, client) => {
-  console.error('Unexpected error on idle PostgreSQL client:', err);
+pool.on("error", (err, client) => {
+  console.error("Unexpected error on idle PostgreSQL client:", err);
   process.exit(-1);
 });
 
 // Test connection on startup
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('❌ Database connection failed:', err.message);
-    process.exit(1);
-  } else {
-    console.log('✅ Database connected successfully at:', res.rows[0].now);
-  }
-});
+if (process.env.NODE_ENV !== "test") {
+  pool.query("SELECT NOW()", (err, res) => {
+    if (err) {
+      console.error("❌ Database connection failed:", err.message);
+      process.exit(1);
+    } else {
+      console.log("✅ Database connected successfully at:", res.rows[0].now);
+    }
+  });
+}
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
-  pool
+  pool,
 };

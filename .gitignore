@@ -2,3 +2,8 @@
 .DS_Store
 *.log
 *.tmp
+
+node_modules
+
+instructions.md
+plan.md

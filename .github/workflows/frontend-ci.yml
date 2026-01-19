@@ -1,0 +1,51 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/frontend/**"]
+  pull_request:
+    branches: [main]
+    paths: ["app/frontend/**"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd app/frontend
+          npm ci
+
+      - name: Lint
+        run: |
+          cd app/frontend
+          npm run lint
+
+      - name: Build
+        run: |
+          cd app/frontend
+          npm run build
+
+      - name: Run tests
+        run: |
+          cd app/frontend
+          npm test
+
+      - name: Build and push Docker image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd app/frontend
+          docker build -t mahmudunnabikajal/bmi-frontend:${{ github.sha }} .
+          echo ${{ secrets.DOCKER_TOKEN }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push mahmudunnabikajal/bmi-frontend:${{ github.sha }}
