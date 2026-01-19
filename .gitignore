@@ -8,4 +8,5 @@ node_modules
 *.md
 
 !CI_CD_Setup.md
+!Docker_Containerization.md
 !Readme.md

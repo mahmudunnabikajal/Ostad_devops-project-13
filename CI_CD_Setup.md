@@ -15,6 +15,6 @@
 
 ## Monitoring Pipelines
 
-- View runs at: https://github.com/mahmudunnabikajal/Ostad_devops-project-13.git
+- View runs at: https://github.com/mahmudunnabikajal/Ostad_devops-project-13
 - Check logs for failures
 - Secrets required: DOCKER_USERNAME, DOCKER_TOKEN
