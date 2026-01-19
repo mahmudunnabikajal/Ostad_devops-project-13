@@ -36,11 +36,3 @@ jobs:
         run: |
           cd app/backend
           npm test
-
-      - name: Build and push Docker image
-        if: github.ref == 'refs/heads/main'
-        run: |
-          cd app/backend
-          docker build -t mahmudunnabikajal/bmi-backend:${{ github.sha }} .
-          echo ${{ secrets.DOCKER_TOKEN }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-          docker push mahmudunnabikajal/bmi-backend:${{ github.sha }}
