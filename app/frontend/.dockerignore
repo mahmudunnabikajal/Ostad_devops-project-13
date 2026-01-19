@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log*
+dist
+.git
+.github
+README.md
+.env
+.eslintrc.js
+babel.config.js
+jest.config.js
+src/setupTests.js
+src/**/*.test.jsx

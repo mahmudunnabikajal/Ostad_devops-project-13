@@ -41,3 +41,17 @@ jobs:
         run: |
           cd app/frontend
           npm test
+
+      - name: Build Docker image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd app/frontend
+          docker build -t mahmudunnabikajal/bmi-frontend:${{ github.sha }} .
+          docker tag mahmudunnabikajal/bmi-frontend:${{ github.sha }} mahmudunnabikajal/bmi-frontend:latest
+
+      - name: Push Docker image to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo ${{ secrets.DOCKER_TOKEN }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push mahmudunnabikajal/bmi-frontend:${{ github.sha }}
+          docker push mahmudunnabikajal/bmi-frontend:latest
