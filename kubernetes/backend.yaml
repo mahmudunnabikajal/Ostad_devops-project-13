@@ -29,7 +29,25 @@ spec:
                   name: db-credentials
                   key: db-url
             - name: REDIS_URL
-              value: "redis://redis-service:6379"
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: redis-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: jwt-secret
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: api-key
+            - name: LOG_LEVEL
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: log-level
           resources:
             requests:
               cpu: 200m

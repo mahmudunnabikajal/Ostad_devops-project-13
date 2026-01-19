@@ -47,6 +47,8 @@ spec:
                 secretKeyRef:
                   name: db-credentials
                   key: database
+            - name: POSTGRES_INITDB_ARGS
+              value: "-c max_connections=200"
           resources:
             requests:
               cpu: 200m

@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets-system
+  labels:
+    name: external-secrets-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets
+  namespace: external-secrets-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-secrets
+rules:
+  - apiGroups:
+      - secretstore.external-secrets.io
+    resources:
+      - secretstores
+      - clustersecretstores
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - external-secrets.io
+    resources:
+      - externalsecrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-secrets
+subjects:
+  - kind: ServiceAccount
+    name: external-secrets
+    namespace: external-secrets-system
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: secretstores.external-secrets.io
+  labels:
+    app.kubernetes.io/name: external-secrets
+spec:
+  names:
+    kind: SecretStore
+    listKind: SecretStoreList
+    plural: secretstores
+    singular: secretstore
+  scope: Namespaced
+  group: external-secrets.io
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: externalsecrets.external-secrets.io
+  labels:
+    app.kubernetes.io/name: external-secrets
+spec:
+  names:
+    kind: ExternalSecret
+    listKind: ExternalSecretList
+    plural: externalsecrets
+    singular: externalsecret
+  scope: Namespaced
+  group: external-secrets.io
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
