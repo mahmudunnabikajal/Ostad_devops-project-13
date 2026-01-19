@@ -95,73 +95,53 @@ Production-ready Kubernetes deployment for the BMI Health Tracker application wi
 
 ### 1. Create namespace and secrets
 
-```bash
-kubectl apply -f kubernetes/namespace.yaml
-kubectl apply -f kubernetes/secrets.yaml
-```
+Apply namespace and secrets:
+
+- `kubernetes/namespace.yaml`
+- `kubernetes/secrets/`
 
 ### 2. Deploy PostgreSQL
 
-```bash
-kubectl apply -f kubernetes/postgresql.yaml
-# Wait for PostgreSQL to be ready
-kubectl rollout status statefulset/postgresql -n bmi-health-tracker
-```
+Apply: `kubernetes/postgresql.yaml`
+
+Wait for PostgreSQL pod to be ready.
 
 ### 3. Deploy Redis
 
-```bash
-kubectl apply -f kubernetes/redis.yaml
-# Wait for Redis to be ready
-kubectl rollout status deployment/redis -n bmi-health-tracker
-```
+Apply: `kubernetes/redis.yaml`
+
+Wait for Redis pod to be ready.
 
 ### 4. Deploy backend
 
-```bash
-kubectl apply -f kubernetes/backend.yaml
-# Wait for backend deployment
-kubectl rollout status deployment/backend -n bmi-health-tracker
-```
+Apply: `kubernetes/backend.yaml`
+
+Wait for backend deployment to be ready.
 
 ### 5. Deploy frontend
 
-```bash
-kubectl apply -f kubernetes/frontend.yaml
-# Wait for frontend deployment
-kubectl rollout status deployment/frontend -n bmi-health-tracker
-```
+Apply: `kubernetes/frontend.yaml`
+
+Wait for frontend deployment to be ready.
 
 ### 6. Deploy ingress
 
-```bash
-kubectl apply -f kubernetes/ingress.yaml
-```
+Apply: `kubernetes/ingress.yaml`
 
 ### 7. Verify deployment
 
-```bash
-# Check all pods
-kubectl get pods -n bmi-health-tracker
+Verify resources:
 
-# Check services
-kubectl get svc -n bmi-health-tracker
-
-# Check ingress
-kubectl get ingress -n bmi-health-tracker
-
-# View logs
-kubectl logs -f deployment/backend -n bmi-health-tracker
-kubectl logs -f deployment/frontend -n bmi-health-tracker
-```
+- All pods in Running state
+- All services created
+- Ingress has IP assigned
+- Check logs for errors
 
 ## Access Application
 
 1. Update your hosts file or DNS:
-
-   ```
-   YOUR_CLUSTER_IP  bmi.example.com
-   ```
+   - Map cluster IP to `bmi.example.com`
+   - Or configure DNS provider
 
 2. Access the app:
    - Frontend: http://bmi.example.com
@@ -169,78 +149,72 @@ kubectl logs -f deployment/frontend -n bmi-health-tracker
 
 ## Scaling
 
-### Manual Scaling
+Scale deployments by updating replica counts in YAML files:
 
-```bash
-# Scale frontend to 5 replicas
-kubectl scale deployment frontend --replicas=5 -n bmi-health-tracker
+- `kubernetes/frontend.yaml` - Frontend replicas
+- `kubernetes/backend.yaml` - Backend replicas
 
-# Scale backend to 3 replicas
-kubectl scale deployment backend --replicas=3 -n bmi-health-tracker
-```
+Kubernetes automatically creates or removes pods to match desired replicas.
 
 ## Monitoring & Debugging
 
 ### Pod Status
 
-```bash
-kubectl get pods -n bmi-health-tracker -w
-```
+Watch pod status in the namespace.
+
+Check if Running, Pending, or CrashLoopBackOff.
 
 ### Pod Events
 
-```bash
-kubectl describe pod <pod-name> -n bmi-health-tracker
-```
+Describe pods to see recent events and conditions.
+
+Shows why pods failed or scheduling issues.
 
 ### Container Logs
 
-```bash
-kubectl logs <pod-name> -n bmi-health-tracker
-kubectl logs <pod-name> -c <container-name> -n bmi-health-tracker --tail=50 -f
-```
+View logs from containers to diagnose issues.
+
+Check stdout and stderr for errors.
+
+Files: `kubernetes/backend.yaml`, `kubernetes/frontend.yaml`, `kubernetes/postgresql.yaml`, `kubernetes/redis.yaml`
 
 ### Port Forward for Local Access
 
-```bash
-# Frontend
-kubectl port-forward svc/frontend-service 8080:80 -n bmi-health-tracker
+Forward local ports to services:
 
-# Backend
-kubectl port-forward svc/backend-service 3000:3000 -n bmi-health-tracker
-
-# PostgreSQL
-kubectl port-forward svc/postgresql-service 5432:5432 -n bmi-health-tracker
-
-# Redis
-kubectl port-forward svc/redis-service 6379:6379 -n bmi-health-tracker
-```
+- Frontend: port 8080 → port 80
+- Backend: port 3000 → port 3000
+- PostgreSQL: port 5432 → port 5432
+- Redis: port 6379 → port 6379
 
 ## Storage & Backup
 
 ### View PVC
 
-```bash
-kubectl get pvc -n bmi-health-tracker
-```
+List all PersistentVolumeClaims in namespace.
+
+Check storage size and volume status.
+
+See `kubernetes/postgresql.yaml` and `kubernetes/redis.yaml` for definitions.
 
 ### Backup PostgreSQL
 
-```bash
-kubectl exec -it postgresql-0 -n bmi-health-tracker -- \
-  pg_dump -U bmi_user -d bmidb > backup.sql
-```
+Create database backups:
+
+1. Access PostgreSQL pod
+2. Use pg_dump to export database
+3. Save backup file locally
+
+See `kubernetes/postgresql.yaml` for connection details.
+
+Credentials in `kubernetes/secrets/db-credentials.yaml`.
 
 ### Restore PostgreSQL
 
-```bash
-kubectl exec -i postgresql-0 -n bmi-health-tracker -- \
-  psql -U bmi_user -d bmidb < backup.sql
-```
+Restore from backup file:
 
-## Cleanup
+1. Access PostgreSQL pod
+2. Use psql to import backup
+3. Verify data restored
 
-```bash
-# Delete all resources in namespace
-kubectl delete namespace bmi-health-tracker
-```
+Test backups before relying on them for recovery.

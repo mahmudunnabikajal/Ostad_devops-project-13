@@ -2,96 +2,48 @@
 
 ## Overview
 
-This document outlines the secret management strategy for the BMI Health Tracker Kubernetes deployment. Secrets are sensitive data that should never be hardcoded in container images or committed to version control. This phase implements a secure, organized approach to managing secrets in Kubernetes.
-
-## Table of Contents
-
-1. [Secret Management Strategy](#secret-management-strategy)
-2. [Supported Secret Types](#supported-secret-types)
-3. [Secret Categories](#secret-categories)
-4. [Implementation Guide](#implementation-guide)
-5. [Operational Procedures](#operational-procedures)
-6. [Security Best Practices](#security-best-practices)
-7. [Advanced Secret Management](#advanced-secret-management)
-8. [Troubleshooting](#troubleshooting)
-
----
+Secrets are sensitive data that must not be hardcoded or committed to version control. This phase implements Kubernetes Secrets for managing database credentials, API keys, and other sensitive configuration.
 
 ## Secret Management Strategy
 
-### Overview of Approach
+**Approach**: Kubernetes Secrets with migration path to advanced solutions (Sealed Secrets, Vault).
 
-The Phase 4 secret management implementation uses **Kubernetes Secrets** as the primary mechanism for managing sensitive data. This approach provides:
+**Benefits**:
 
-- **Built-in Integration**: Secrets are native Kubernetes objects with first-class support
-- **Decoupling**: Sensitive data is separated from application code and container images
-- **Environment Injection**: Secrets are injected as environment variables at runtime
-- **Organization**: Secrets are structured in dedicated manifest files
-- **Scalability**: Secrets are stored in `etcd` with encryption at rest (in production)
+- Built-in Kubernetes integration
+- Separates sensitive data from code
+- Environment variable injection at runtime
+- Organized in dedicated manifest files
 
-### Architecture Layers
+**Options**:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Application Pods (Backend, Frontend, PostgreSQL)             │
-├─────────────────────────────────────────────────────────────┤
-│ ↑ Secret References (valueFrom: secretKeyRef)                │
-├─────────────────────────────────────────────────────────────┤
-│ Kubernetes Secrets (etcd-backed, encrypted)                   │
-│ ├─ db-credentials                                             │
-│ ├─ api-keys                                                   │
-│ ├─ redis-credentials                                          │
-│ ├─ app-config                                                 │
-│ └─ registry-credentials                                       │
-├─────────────────────────────────────────────────────────────┤
-│ YAML Manifests (./kubernetes/secrets/)                        │
-│ └─ Version Controlled, Encrypted/Restricted in Git            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Comparison of Approaches
-
-| Approach               | Pros                                        | Cons                                | Use Case                       |
-| ---------------------- | ------------------------------------------- | ----------------------------------- | ------------------------------ |
-| **Kubernetes Secrets** | Built-in, Simple, Native integration        | Base64 (not encrypted by default)   | Development, Small deployments |
-| **Sealed Secrets**     | Encrypted, Git-friendly, Easy rotation      | Requires controller                 | Production single cluster      |
-| **HashiCorp Vault**    | Highly secure, Audit logs, Dynamic secrets  | Complex setup, Operational overhead | Enterprise, Multi-cluster      |
-| **Cloud Managers**     | Cloud-native, Managed service, Audit trails | Vendor lock-in, Cost                | AWS/Azure/GCP deployments      |
-
-**Phase 4 Implementation**: We use **Kubernetes Secrets** with a migration path to **Sealed Secrets** for enhanced security.
-
----
+- **Development**: Kubernetes Secrets (built-in)
+- **Production**: Sealed Secrets or HashiCorp Vault (encrypted)
 
 ## Supported Secret Types
 
-### Type: `Opaque` (default)
-
-Generic key-value pairs, Base64 encoded. Used for:
+**Opaque** (default) - Generic key-value pairs:
 
 - Database credentials
 - API keys
 - JWT secrets
 - Configuration values
 
-```yaml
-type: Opaque
-data:
-  username: Ym1pX3VzZXI= # bmi_user
-  password: c3Ryb25ncGFzz= # strongpassword
-```
+**kubernetes.io/dockercfg** - Docker registry authentication:
+
+- Private container image access
+
+**kubernetes.io/service-account-token** - Auto-generated service account tokens
+
+**kubernetes.io/basic-auth** - Username and password pairs
+
+**kubernetes.io/ssh-auth** - SSH authentication keys
 
 ### Type: `kubernetes.io/dockercfg`
 
-Docker registry authentication. Used for:
+**kubernetes.io/dockercfg** - Docker registry authentication:
 
-- Pulling private container images
-- Authenticating with Docker Hub, ECR, or private registries
-
-```yaml
-type: kubernetes.io/dockercfg
-data:
-  .dockercfg: eyJkb2Nrz... # Encoded Docker config
-```
+- Private container image access
 
 ### Type: `kubernetes.io/service-account-token`
 
@@ -109,148 +61,111 @@ SSH authentication keys.
 
 ## Secret Categories
 
-### 1. Database Credentials (`db-credentials.yaml`)
+### 1. Database Credentials
 
-**Location**: `kubernetes/secrets/db-credentials.yaml`
+**File**: `kubernetes/secrets/db-credentials.yaml`
 
-**Contains**:
+**Keys**:
 
-- `username`: PostgreSQL user (bmi_user)
-- `password`: PostgreSQL password
-- `database`: Database name (bmidb)
-- `db-url`: Full connection string for applications
+- `username` - PostgreSQL user
+- `password` - PostgreSQL password
+- `database` - Database name
+- `db-url` - Full connection string
 
-**Referenced by**:
+**Used by**: `kubernetes/backend.yaml`, `kubernetes/postgresql.yaml`
 
-- `backend.yaml` (DATABASE_URL environment variable)
-- `postgresql.yaml` (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)
+**Rotation**: Update manifest, restart PostgreSQL and backend
 
-**Rotation Strategy**: Change password in secret, restart PostgreSQL, update backup credentials.
+### 2. API Keys & Tokens
 
-### 2. API Keys & Tokens (`api-keys.yaml`)
+**File**: `kubernetes/secrets/api-keys.yaml`
 
-**Location**: `kubernetes/secrets/api-keys.yaml`
+**Keys**:
 
-**Contains**:
+- `jwt-secret` - JWT authentication key
+- `api-key` - Third-party API keys
+- `redis-password` - Redis cache password
+- `redis-url` - Redis connection string
 
-- `jwt-secret`: JWT token signing key for authentication
-- `api-key`: Third-party API integration keys
-- `redis-password`: Redis cache password
-- `redis-url`: Redis connection string with authentication
+**Used by**: `kubernetes/backend.yaml`
 
-**Referenced by**:
+**Rotation**: Generate new keys, update manifest, restart backend
 
-- `backend.yaml` (JWT_SECRET, API_KEY environment variables)
+### 3. Registry Credentials
 
-**Rotation Strategy**: Generate new keys, update secret, restart deployments.
-
-### 3. Application Configuration (`api-keys.yaml`)
-
-**Location**: `kubernetes/secrets/api-keys.yaml`
-
-**Contains**:
-
-- `app-secret`: Application-level secret key
-- `log-level`: Application logging level
-
-**Referenced by**:
-
-- `backend.yaml` (LOG_LEVEL environment variable)
-
-**Use Case**: Non-critical but sensitive configuration values.
-
-### 4. Registry Credentials (`registry-credentials.yaml`)
-
-**Location**: `kubernetes/secrets/registry-credentials.yaml`
+**File**: `kubernetes/secrets/registry-credentials.yaml`
 
 **Type**: `kubernetes.io/dockercfg`
 
-**Contains**:
+**Keys**:
 
-- `.dockercfg`: Docker registry authentication
+- `.dockercfg` - Docker registry authentication
 
-**Usage**: Reference in `imagePullSecrets` for private image pulling:
-
-```yaml
-spec:
-  imagePullSecrets:
-    - name: registry-credentials
-```
-
----
+**Used by**: `imagePullSecrets` in pod specifications
 
 ## Implementation Guide
 
-### Directory Structure
+**Files**:
 
-```
-kubernetes/
-├── secrets/                          # Phase 4: Secret Management
-│   ├── db-credentials.yaml           # Database credentials secret
-│   ├── api-keys.yaml                 # API keys & tokens secret
-│   ├── registry-credentials.yaml     # Docker registry credentials
-│   ├── kustomization.yaml            # Kustomize overlay
-│   ├── secrets-management.sh         # Secret management script
-│   └── README.md                     # Secret usage documentation
-├── backend.yaml                      # Updated with secret references
-├── frontend.yaml                     # Frontend deployment
-├── postgresql.yaml                   # Updated with secret references
-├── redis.yaml                        # Redis deployment
-├── ingress.yaml                      # Ingress configuration
-├── namespace.yaml                    # Namespace definition
-└── ... (other K8s files)
-```
+- `kubernetes/secrets/db-credentials.yaml` - Database credentials
+- `kubernetes/secrets/api-keys.yaml` - API keys and tokens
+- `kubernetes/secrets/registry-credentials.yaml` - Docker authentication
+- `kubernetes/secrets/kustomization.yaml` - Kustomize overlay
+- `kubernetes/secrets/secrets-management.sh` - Management script
+- `kubernetes/secrets/README.md` - Detailed documentation
 
 ### Creating Secrets
 
 #### Option 1: Using Kubectl (Recommended for updates)
 
-```bash
-# Create database credentials secret
-kubectl create secret generic db-credentials \
-  --from-literal=username=bmi_user \
-  --from-literal=password=strongpassword \
-  --from-literal=database=bmidb \
-  --from-literal=db-url='postgresql://bmi_user:strongpassword@postgresql-service:5432/bmidb' \
-  -n bmi-health-tracker
+Create secrets using kubectl command-line tool.
 
-# Create API keys secret
-kubectl create secret generic api-keys \
-  --from-literal=jwt-secret='your-super-secret-jwt-key' \
-  --from-literal=api-key='your-api-key' \
-  -n bmi-health-tracker
+For database credentials:
 
-# Create Docker registry secret
-kubectl create secret docker-registry registry-credentials \
-  --docker-server=docker.io \
-  --docker-username=mahmudunnabikajal \
-  --docker-password=<your-token> \
-  --docker-email=your-email@example.com \
-  -n bmi-health-tracker
-```
+- Specify username, password, database name, connection URL
+- See `kubernetes/secrets/db-credentials.yaml` for exact values
+
+For API keys:
+
+- Provide JWT secret for authentication
+- Provide third-party API keys
+- See `kubernetes/secrets/api-keys.yaml` for configuration
+
+For Docker registry authentication:
+
+- Specify Docker server, username, password, email
+- See `kubernetes/secrets/registry-credentials.yaml` for format
 
 #### Option 2: Using YAML Manifests (Current Implementation)
 
-```bash
-# Apply all secrets using manifests
-kubectl apply -f kubernetes/secrets/
+Apply secret manifests directly using kubectl.
 
-# Or use Kustomize
-kubectl apply -k kubernetes/secrets/
-```
+Use provided YAML files in `kubernetes/secrets/` directory:
+
+- `kubernetes/secrets/db-credentials.yaml`
+- `kubernetes/secrets/api-keys.yaml`
+- `kubernetes/secrets/registry-credentials.yaml`
+
+Alternatively, use Kustomize to apply secrets with overlays:
+
+- See `kubernetes/secrets/kustomization.yaml` for configuration
 
 #### Option 3: Using the Management Script
 
-```bash
-# Make script executable
-chmod +x kubernetes/secrets/secrets-management.sh
+Use automated script for secret management operations:
 
-# Create all secrets
-./kubernetes/secrets/secrets-management.sh create
+- `kubernetes/secrets/secrets-management.sh`
 
-# Verify creation
-./kubernetes/secrets/secrets-management.sh list
-```
+The script provides:
+
+- Create all secrets from manifests
+- List existing secrets
+- Decode secret values (for debugging)
+- Update secrets
+- Delete secrets
+- Verify secret usage in deployments
+
+See `kubernetes/secrets/README.md` for script usage examples.
 
 ### Referencing Secrets in Deployments
 
@@ -258,196 +173,207 @@ chmod +x kubernetes/secrets/secrets-management.sh
 
 Used for database credentials, API keys, and configuration values.
 
-```yaml
-env:
-  - name: DATABASE_URL
-    valueFrom:
-      secretKeyRef:
-        name: db-credentials
-        key: db-url
-  - name: JWT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: api-keys
-        key: jwt-secret
-```
+Set environment variables from secret keys:
+
+- `DATABASE_URL` from `db-credentials` secret
+- `JWT_SECRET` from `api-keys` secret
+
+See deployment YAML files for implementation examples.
 
 #### Method 2: Volume Mounts (for files)
 
 Used for certificate files, config files, or SSH keys.
 
-```yaml
-volumes:
-  - name: secret-volume
-    secret:
-      secretName: my-secret
-containers:
-  - name: app
-    volumeMounts:
-      - name: secret-volume
-        mountPath: /etc/secrets
-        readOnly: true
-```
+Mount secrets as files at specific paths:
+
+- Read-only access by containers
+- Applications read files directly
+- More secure than environment variables
 
 #### Method 3: Image Pull Secrets (for registry)
 
 Used to pull private container images.
 
-```yaml
-spec:
-  imagePullSecrets:
-    - name: registry-credentials
-```
+Reference secret in pod specification for private registry access.
 
 ---
 
 ## Operational Procedures
 
-### Listing All Secrets
+## Operational Procedures
 
-```bash
-# List secrets in the namespace
-kubectl get secrets -n bmi-health-tracker
+### Listing Secrets
 
-# List with more details
-kubectl get secrets -n bmi-health-tracker -o wide
+List all secrets in the namespace to verify they exist.
 
-# List with labels
-kubectl get secrets -n bmi-health-tracker -L app,component
-```
+See `kubernetes/secrets/` for secret manifest files.
 
 ### Describing a Secret
 
-```bash
-# Describe a specific secret (shows keys, not values)
-kubectl describe secret db-credentials -n bmi-health-tracker
+View secret keys without revealing values (safe for debugging).
 
-# Output shows all keys but hides sensitive values for safety
-```
+Shows available keys in each secret.
 
-### Viewing Secret Contents (Caution ⚠️)
+### Viewing Secret Contents
 
-```bash
-# Decode and display a secret value (use with caution)
-kubectl get secret db-credentials -n bmi-health-tracker \
-  -o jsonpath='{.data.password}' | base64 -d
+**Caution**: Decoded secrets appear in command history.
 
-# Using the management script
-./kubernetes/secrets/secrets-management.sh decode db-credentials password
-```
+Use management script for safer access:
 
-⚠️ **Warning**: Decoded secrets are visible in command history. Use this only when necessary and clear history afterward.
+- `./kubernetes/secrets/secrets-management.sh decode <secret> <key>`
+
+Clear shell history after viewing sensitive values.
 
 ### Creating/Updating Secrets
 
-#### Update from YAML manifest
+**Steps**:
 
-```bash
-# Edit the YAML file
-nano kubernetes/secrets/api-keys.yaml
+1. Edit the YAML manifest file
+2. Update Base64 encoded values
+3. Apply the manifest using kubectl
+4. Restart deployments to use updated secrets
 
-# Update Base64 encoded values:
-echo -n 'new-password' | base64
+**Files**:
 
-# Apply the updated manifest
-kubectl apply -f kubernetes/secrets/api-keys.yaml
+- `kubernetes/secrets/db-credentials.yaml`
+- `kubernetes/secrets/api-keys.yaml`
+- `kubernetes/secrets/registry-credentials.yaml`
 
-# Restart deployments to pick up changes
-kubectl rollout restart deployment/backend -n bmi-health-tracker
-```
+Or use management script:
 
-#### Update using the management script
+- `./kubernetes/secrets/secrets-management.sh update <secret>`
 
-```bash
-# Update a specific secret
-./kubernetes/secrets/secrets-management.sh update api-keys
+### Rotating Secrets
 
-# The script will delete and re-create the secret from the manifest
-```
+**Steps**:
+
+1. Generate new password/key
+2. Update secret manifest with new Base64 encoded value
+3. Apply the updated manifest
+4. Restart affected services (PostgreSQL first, then backend)
+5. Verify services connect successfully in logs
+
+See `kubernetes/secrets/db-credentials.yaml` for password location.
+
+### Deleting Secrets
+
+Delete specific secrets or entire secret set.
+
+Use management script:
+
+- `./kubernetes/secrets/secrets-management.sh delete`
+
+**Warning**: Deleting secrets is permanent. Verify apps don't need them first.
+
+### Verifying Secret Usage
+
+Check which pods reference specific secrets.
+
+Use management script:
+
+- `./kubernetes/secrets/secrets-management.sh verify`
+
+Review deployment YAML files for secret references.
+
+### Describing a Secret
+
+View secret keys without revealing values (safe for debugging).
+
+Shows available keys in each secret.
+
+### Viewing Secret Contents
+
+**Caution**: Decoded secrets appear in command history.
+
+Use management script for safer access:
+
+- `./kubernetes/secrets/secrets-management.sh decode <secret> <key>`
+
+Clear shell history after viewing sensitive values.
+
+### Creating/Updating Secrets
+
+**Steps**:
+
+1. Edit the YAML manifest file
+2. Update Base64 encoded values
+3. Apply the manifest using kubectl
+4. Restart deployments to use updated secrets
+
+**Files**:
+
+- `kubernetes/secrets/db-credentials.yaml`
+- `kubernetes/secrets/api-keys.yaml`
+- `kubernetes/secrets/registry-credentials.yaml`
+
+Or use management script:
+
+- `./kubernetes/secrets/secrets-management.sh update <secret>`
 
 #### Emergency secret update
 
-```bash
-# Delete and recreate
-kubectl delete secret api-keys -n bmi-health-tracker
-kubectl apply -f kubernetes/secrets/api-keys.yaml
+Delete and recreate the secret:
 
-# Restart affected pods
-kubectl rollout restart deployment/backend -n bmi-health-tracker
-```
+1. Delete the existing secret from Kubernetes
+2. Apply the updated secret manifest
+3. Restart affected deployments to pick up changes
+
+For example, when updating API keys:
+
+- Update the manifest file with new values
+- Apply the manifest using kubectl
+- Restart the backend deployment to use new values
+
+See `kubernetes/secrets/` for manifest files.
 
 ### Rotating Secrets
 
 #### Procedure for Password Rotation
 
 1. **Generate new password**:
-
-   ```bash
-   openssl rand -base64 32
-   # Output: abc123XYZ...
-   ```
+   Use a password generator or openssl to create a strong password.
 
 2. **Update the secret manifest**:
-
-   ```bash
-   # Encode the new password
-   echo -n 'abc123XYZ...' | base64
-   # Output: YWJjMTIzWFlausD...
-
-   # Edit the manifest
-   nano kubernetes/secrets/db-credentials.yaml
-   # Replace: password: c3Ryb25ncGFzc3dvcmQ=
-   # With:    password: YWJjMTIzWFlausD...
-   ```
+   - Encode the new password in Base64
+   - Edit the manifest file in `kubernetes/secrets/`
+   - Replace the old encoded value with the new one
 
 3. **Apply the update**:
-
-   ```bash
-   kubectl apply -f kubernetes/secrets/db-credentials.yaml
-   ```
+   Apply the updated manifest using kubectl.
 
 4. **Restart affected services**:
-
-   ```bash
-   # Restart PostgreSQL first
-   kubectl rollout restart statefulset/postgresql -n bmi-health-tracker
-
-   # Restart backend
-   kubectl rollout restart deployment/backend -n bmi-health-tracker
-   ```
+   Restart PostgreSQL and backend deployments in correct order.
+   PostgreSQL should restart first, then dependent services.
 
 5. **Verify connectivity**:
-   ```bash
-   # Check backend logs for successful connection
-   kubectl logs -f deployment/backend -n bmi-health-tracker
-   ```
+   Check logs of affected services to confirm they connect successfully with new password.
+
+See `kubernetes/secrets/db-credentials.yaml` for credential location.
 
 ### Deleting Secrets
 
-```bash
-# Delete a specific secret
-kubectl delete secret api-keys -n bmi-health-tracker
+Delete specific secrets or all secrets in namespace.
 
-# Delete all secrets (careful!)
-kubectl delete secrets --all -n bmi-health-tracker
+Use the management script:
 
-# Using the management script
-./kubernetes/secrets/secrets-management.sh delete
-```
+- `./kubernetes/secrets/secrets-management.sh delete`
+
+Or delete manually using kubectl on individual secret files.
+
+**Warning**: Deleting secrets is irreversible. Ensure applications don't need them first.
 
 ### Verifying Secret Usage
 
-```bash
-# Check how secrets are referenced in deployments
-./kubernetes/secrets/secrets-management.sh verify
+Check which deployments and pods reference specific secrets.
 
-# Alternatively, view the deployment YAML
-kubectl get deployment backend -n bmi-health-tracker -o yaml | grep -A 10 secretKeyRef
+Use the management script:
 
-# List all pods using a specific secret
-kubectl get pods -n bmi-health-tracker -o jsonpath=\
-  '{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].env[*].valueFrom.secretKeyRef.name}{"\n"}{end}'
-```
+- `./kubernetes/secrets/secrets-management.sh verify`
+
+Review deployment YAML files to see secret references:
+
+- `kubernetes/backend.yaml` - Backend secret references
+- `kubernetes/postgresql.yaml` - Database secret references
 
 ---
 
@@ -455,102 +381,68 @@ kubectl get pods -n bmi-health-tracker -o jsonpath=\
 
 ### 1. Secret Storage & Access Control
 
-```bash
-# Create RBAC role for secret access
-kubectl create role secrets-reader \
-  --verb=get,list \
-  --resource=secrets \
-  -n bmi-health-tracker
+Implement RBAC to restrict secret access to authorized service accounts only.
 
-# Bind role to service account
-kubectl create rolebinding secrets-reader \
-  --role=secrets-reader \
-  --serviceaccount=bmi-health-tracker:default \
-  -n bmi-health-tracker
-```
+Specify which service accounts can read which secrets.
+
+See `kubernetes/secrets/README.md` for RBAC examples.
 
 ### 2. Base64 Encoding (Not Encryption)
 
-⚠️ **Important**: Base64 is encoding, NOT encryption. Anyone with access to the YAML files can decode the secrets:
+Base64 is encoding, NOT encryption. Anyone with file access can decode values.
 
-```bash
-# To decode (easy!)
-echo 'c3Ryb25ncGFzc3dvcmQ=' | base64 -d
-# Output: strongpassword
-```
+**Never commit plain-text secrets to Git.**
 
-**Never commit plain-text secrets to Git. For Git storage, use encryption**.
+Use encryption tools like SOPS for sensitive files stored in version control.
 
 ### 3. Git Security
 
-```bash
-# Create .gitignore patterns
-echo "kubernetes/secrets/*.yaml" >> .gitignore
-echo ".env" >> .gitignore
+Add secret files to `.gitignore`:
 
-# Or encrypt secrets before committing
-kubectl create secret generic db-credentials \
-  --from-literal=username=bmi_user \
-  --dry-run=client -o yaml | sops -e - > kubernetes/secrets/db-credentials-encrypted.yaml
-```
+- `kubernetes/secrets/*.yaml`
+- `.env` files
+- Any unencrypted credential files
+
+Encrypt secrets before committing to Git using:
+
+- SOPS (Secrets Operations)
+- Sealed Secrets
+- HashiCorp Vault
 
 ### 4. Restricting Secret Access
 
-```yaml
-# RBAC: Only let backend pods read db-credentials
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: backend-secrets
-  namespace: bmi-health-tracker
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    resourceNames: ["db-credentials", "api-keys"] # Only these secrets
-    verbs: ["get", "list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: backend-secrets
-  namespace: bmi-health-tracker
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: backend-secrets
-subjects:
-  - kind: ServiceAccount
-    name: backend
-    namespace: bmi-health-tracker
-```
+Create RBAC roles to limit which pods can access which secrets.
+
+Backend pods should only access:
+
+- `db-credentials`
+- `api-keys`
+
+Frontend pods should only access:
+
+- Non-sensitive configuration secrets
+
+See `kubernetes/secrets/README.md` for RBAC role examples.
 
 ### 5. Audit Logging
 
-Enable audit logs to track secret access:
+Monitor and log all secret access for compliance.
 
-```bash
-# Check audit logs (if enabled in cluster)
-kubectl get events -n bmi-health-tracker | grep secret
+Enable audit logging in your Kubernetes cluster.
 
-# Watch for secret access
-kubectl logs -f -n kube-system -l component=audit-webhook
-```
+Review logs regularly for unauthorized access attempts.
 
 ### 6. Environment Variable Security
 
-Avoid storing highly sensitive data as environment variables. For maximum security:
+Sensitive data in environment variables can be inspected in pod memory.
 
-```yaml
-# Instead of env variables, mount as files (harder to inspect in memory)
-volumeMounts:
-  - name: db-secret
-    mountPath: /etc/db-credentials
-    readOnly: true
-volumes:
-  - name: db-secret
-    secret:
-      secretName: db-credentials
-```
+For highly sensitive data, mount secrets as files instead:
+
+- Secrets mounted at `/etc/secrets` (read-only)
+- Applications read from files directly
+- Harder to inspect in memory than env variables
+
+See deployment YAML files for volume mount examples.
 
 ---
 
@@ -558,129 +450,48 @@ volumes:
 
 ### Option 1: Sealed Secrets (Production Ready)
 
-Sealed Secrets encrypts secrets using asymmetric encryption. Only the cluster can decrypt them.
+Sealed Secrets encrypts secrets using asymmetric encryption. Only the cluster can decrypt.
 
-#### Installation
+**Features:**
 
-```bash
-# Add Sealed Secrets Helm repo
-helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
-helm install sealed-secrets sealed-secrets/sealed-secrets -n kube-system
-
-# Verify installation
-kubectl get deployment sealed-secrets -n kube-system
-```
-
-#### Usage
-
-```bash
-# Create a secret and seal it
-echo -n 'strongpassword' | kubectl create secret generic db-password \
-  --dry-run=client \
-  --from-file=/dev/stdin \
-  -o yaml | kubeseal -f - > sealed-secret.yaml
-
-# Apply sealed secret
-kubectl apply -f sealed-secret.yaml
-
-# Sealed secret auto-decrypts when applied to the cluster
-```
-
-**Advantages**:
-
-- Encrypted at rest in Git
-- Only the cluster can decrypt
+- Encrypted secrets stored in Git
+- Automatic decryption by cluster
 - Easy secret rotation
 - Audit trail available
 
+See Sealed Secrets official documentation for installation and usage.
+
 ### Option 2: HashiCorp Vault
 
-For enterprise deployments with dynamic secrets, policies, and audit trails.
+Enterprise-grade secret management with dynamic secrets, policies, and audit trails.
 
-#### Installation
+**Features:**
 
-```bash
-# Add Vault Helm repo
-helm repo add hashicorp https://helm.releases.hashicorp.com
-helm install vault hashicorp/vault -n vault --create-namespace
-
-# Unseal Vault
-kubectl exec -it vault-0 -n vault -- vault operator init
-kubectl exec -it vault-0 -n vault -- vault operator unseal
-
-# Configure Kubernetes auth
-kubectl exec -it vault-0 -n vault -- vault auth enable kubernetes
-```
-
-#### Integration with Kubernetes
-
-```yaml
-# Pod with Vault annotation
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app
-  annotations:
-    vault.hashicorp.com/agent-inject: "true"
-    vault.hashicorp.com/agent-inject-secret-db: "secret/data/db"
-spec:
-  containers:
-    - name: app
-      image: myapp:latest
-```
-
-**Advantages**:
-
-- Dynamic secrets generation
+- Dynamic secret generation
 - Fine-grained access policies
-- Audit logging
-- Secret rotation automation
+- Comprehensive audit logging
+- Automated secret rotation
 - Multi-cluster support
 
-### Option 3: External Secrets (Hybrid Approach)
+See HashiCorp Vault documentation for setup and integration.
 
-External Secrets allows synchronizing secrets from external systems (Vault, AWS Secrets Manager, etc.) into Kubernetes.
+Vault integration files available in:
 
-#### Installation
+- `kubernetes/vault/` - Vault deployment manifests
+- `kubernetes/external-secrets/` - External Secrets Operator manifests
 
-```bash
-# Install External Secrets Operator
-helm repo add external-secrets https://charts.external-secrets.io
-helm install external-secrets external-secrets/external-secrets -n external-secrets-system --create-namespace
-```
+### Option 3: External Secrets Operator
 
-#### Configuration
+Synchronize secrets from external systems (Vault, AWS Secrets Manager) into Kubernetes.
 
-```yaml
-apiVersion: external-secrets.io/v1beta1
-kind: SecretStore
-metadata:
-  name: vault-backend
-spec:
-  provider:
-    vault:
-      server: "http://vault.vault.svc"
-      path: "secret"
-      auth:
-        kubernetes:
-          mountPath: "kubernetes"
-          role: "external-secrets"
----
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: db-secret
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: vault-backend
-  target:
-    name: db-credentials
-  data:
-    - secretKey: password
-      remoteRef:
-        key: db-password
-```
+**Features**:
+
+- Single source of truth for secrets
+- Automatic synchronization
+- Support for multiple secret providers
+- Easy secret rotation
+
+See `kubernetes/external-secrets/` for configuration examples with SecretStore and ExternalSecret manifests.
 
 **Advantages**:
 
@@ -695,59 +506,44 @@ spec:
 
 ### Issue 1: Pods Can't Access Secrets
 
-**Symptom**: Pod fails with `error reading secret` or environment variables are empty.
+**Problem**: Pod fails with `error reading secret` or environment variables are empty.
 
-**Solution**:
+**Steps:**
 
-```bash
-# Check if secret exists
-kubectl get secrets db-credentials -n bmi-health-tracker
+1. Verify secret exists in namespace
+2. Check pod environment variables are set
+3. Review pod YAML definition for correct secretKeyRef
+4. Restart the pod to reload secrets
+5. Check pod logs for error messages
 
-# Check pod environment variables
-kubectl exec -it pod/backend-xxxxx -c backend \
-  -n bmi-health-tracker -- env | grep DATABASE
-
-# Check pod definition
-kubectl get pod backend-xxxxx -n bmi-health-tracker -o yaml | grep -A 5 secretKeyRef
-
-# Restart the pod to reload secrets
-kubectl rollout restart deployment/backend -n bmi-health-tracker
-```
+See `kubernetes/backend.yaml` and `kubernetes/secrets/` for configuration examples.
 
 ### Issue 2: Secret Key Not Found
 
-**Symptom**: Pod error: `couldn't find key password in Secret default/my-secret`
+**Problem**: Pod error: `couldn't find key password in Secret`
 
-**Solution**:
+**Steps:**
 
-```bash
-# List all keys in the secret
-kubectl get secret db-credentials -n bmi-health-tracker -o jsonpath='{.data}' | jq keys
+1. List all keys in the secret file
+2. Verify key names match what's referenced in pod YAML
+3. If key is missing, update the secret manifest
+4. Apply the updated secret
 
-# Expected output:
-# ["database", "db-url", "password", "username"]
+See `kubernetes/secrets/db-credentials.yaml` for available keys.
 
-# If key is missing, update the secret
-kubectl apply -f kubernetes/secrets/db-credentials.yaml
-```
+### Issue 3: Secret Values Not Being Read
 
-### Issue 3: Base64 Decoding Issues
+**Problem**: Application receives empty or incorrect values from secret.
 
-**Symptom**: Application receives garbled text from secret.
+**Steps:**
 
-**Solution**:
+1. Verify secret is Base64 encoded correctly
+2. Check that pod has permission to read the secret (RBAC)
+3. Verify secret reference path in pod YAML
+4. Check pod logs for decode errors
+5. Restart pod after updating secret
 
-```bash
-# Verify the encoded value is correct
-echo -n 'strongpassword' | base64
-# Output: c3Ryb25ncGFzc3dvcmQ=
-
-# If different, update the secret with correct encoding
-nano kubernetes/secrets/db-credentials.yaml
-
-# Apply the fix
-kubectl apply -f kubernetes/secrets/db-credentials.yaml
-```
+Review `kubernetes/secrets/README.md` for secret encoding details.
 
 ### Issue 4: Secret Size Limit Exceeded
 
@@ -757,16 +553,12 @@ kubectl apply -f kubernetes/secrets/db-credentials.yaml
 
 **Solution**:
 
-```bash
-# Check secret size
-kubectl get secret api-keys -n bmi-health-tracker -o json | jq '.data | length'
-
-# If too large, split into multiple secrets
-# Create separate secrets for different components
-kubectl apply -f kubernetes/secrets/db-credentials.yaml
-kubectl apply -f kubernetes/secrets/api-keys.yaml
-kubectl apply -f kubernetes/secrets/registry-credentials.yaml
-```
+1. Check secret size: Use `kubectl get secret api-keys -n bmi-health-tracker -o json | jq '.data | length'`
+2. If too large, split into multiple secrets
+3. Apply separate secret files:
+   - `kubernetes/secrets/db-credentials.yaml`
+   - `kubernetes/secrets/api-keys.yaml`
+   - `kubernetes/secrets/registry-credentials.yaml`
 
 ### Issue 5: ImagePullBackOff with Registry Credentials
 
@@ -774,26 +566,14 @@ kubectl apply -f kubernetes/secrets/registry-credentials.yaml
 
 **Solution**:
 
-```bash
-# Verify registry secret exists
-kubectl get secret registry-credentials -n bmi-health-tracker
+1. Verify registry secret exists: `kubectl get secret registry-credentials -n bmi-health-tracker`
+2. Check imagePullSecrets in deployment: `kubectl get deployment backend -n bmi-health-tracker -o yaml | grep -A 2 imagePullSecrets`
+3. Delete old registry credentials if needed: `kubectl delete secret registry-credentials -n bmi-health-tracker`
+4. Create new registry credentials with your credentials
+5. Update deployments with imagePullSecrets
+6. Verify pods pull the image successfully
 
-# Check imagePullSecrets in deployment
-kubectl get deployment backend -n bmi-health-tracker -o yaml | grep -A 2 imagePullSecrets
-
-# Recreate registry credentials
-kubectl delete secret registry-credentials -n bmi-health-tracker
-kubectl create secret docker-registry registry-credentials \
-  --docker-server=docker.io \
-  --docker-username=<your-username> \
-  --docker-password=<your-token> \
-  --docker-email=<your-email> \
-  -n bmi-health-tracker
-
-# Update deployments to use the secret
-kubectl patch deployment backend -n bmi-health-tracker -p \
-  '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"registry-credentials"}]}}}}'
-```
+See `kubernetes/secrets/registry-credentials.yaml` for configuration.
 
 ### Issue 6: Secrets Not Reloading After Update
 
@@ -801,19 +581,11 @@ kubectl patch deployment backend -n bmi-health-tracker -p \
 
 **Solution**:
 
-```bash
-# Kubernetes doesn't automatically reload secrets
-# You must restart the pods
+Note: Kubernetes doesn't automatically reload secrets. You must restart pods.
 
-# Restart deployment
-kubectl rollout restart deployment/backend -n bmi-health-tracker
-
-# Wait for new pods to be ready
-kubectl rollout status deployment/backend -n bmi-health-tracker
-
-# Verify new values are loaded
-kubectl exec -it deployment/backend -n bmi-health-tracker -- env | grep DATABASE_URL
-```
+1. Restart deployment: `kubectl rollout restart deployment/backend -n bmi-health-tracker`
+2. Wait for new pods: `kubectl rollout status deployment/backend -n bmi-health-tracker`
+3. Verify new values are loaded: Check pod environment variables with `kubectl exec`
 
 ---
 
@@ -821,55 +593,20 @@ kubectl exec -it deployment/backend -n bmi-health-tracker -- env | grep DATABASE
 
 ### Scenario: Rotating PostgreSQL password every 90 days
 
-```bash
-#!/bin/bash
-# rotate-db-password.sh
+**Steps**:
 
-NAMESPACE="bmi-health-tracker"
-OLD_PASSWORD="strongpassword"
-NEW_PASSWORD=$(openssl rand -base64 32)
+1. Generate new password (save securely)
+2. Encode new password in Base64
+3. Update secret manifest with new password
+4. Update connection string with new credentials
+5. Apply the secret update
+6. Restart PostgreSQL StatefulSet to recognize new password
+7. Wait for PostgreSQL to be ready (check pod status)
+8. Restart backend deployment
+9. Wait for backend pods to be ready
+10. Verify backend can connect to database
 
-echo "Rotating database password..."
-echo "New password (save securely): $NEW_PASSWORD"
-
-# Step 1: Encode new password
-ENCODED_PASSWORD=$(echo -n "$NEW_PASSWORD" | base64)
-
-# Step 2: Update secret manifest
-sed -i "s/password: .*/password: $ENCODED_PASSWORD/" \
-  kubernetes/secrets/db-credentials.yaml
-
-# Step 3: Update connection string
-NEW_DB_URL="postgresql://bmi_user:${NEW_PASSWORD}@postgresql-service:5432/bmidb"
-ENCODED_URL=$(echo -n "$NEW_DB_URL" | base64)
-sed -i "s/db-url: .*/db-url: $ENCODED_URL/" \
-  kubernetes/secrets/db-credentials.yaml
-
-# Step 4: Apply the secret update
-kubectl apply -f kubernetes/secrets/db-credentials.yaml
-echo "✓ Secret updated"
-
-# Step 5: Restart PostgreSQL
-kubectl rollout restart statefulset/postgresql -n $NAMESPACE
-echo "✓ PostgreSQL restarting..."
-
-# Wait for PostgreSQL to be ready
-kubectl rollout status statefulset/postgresql -n $NAMESPACE --timeout=5m
-
-# Step 6: Restart backend
-kubectl rollout restart deployment/backend -n $NAMESPACE
-echo "✓ Backend restarting..."
-
-# Wait for backend to be ready
-kubectl rollout status deployment/backend -n $NAMESPACE --timeout=5m
-
-# Step 7: Verify
-echo "✓ Password rotation complete"
-echo "Verifying backend connectivity..."
-kubectl logs -f deployment/backend -n $NAMESPACE | grep -i "connected\|error" | head -5
-
-echo "Done!"
-```
+Use the script at `kubernetes/secrets/secrets-management.sh` for password rotation automation.
 
 ---
 
@@ -877,13 +614,10 @@ echo "Done!"
 
 ### Audit Trail Template
 
-```bash
-# Log all secret operations
-kubectl get events -n bmi-health-tracker --sort-by='.lastTimestamp' | grep -i secret
+Track all secret operations:
 
-# Export audit log
-kubectl logs -n kube-system -l component=audit-webhook > secret-audit.log
+1. Review events: `kubectl get events -n bmi-health-tracker --sort-by='.lastTimestamp' | grep -i secret`
+2. Export audit logs from kube-system
+3. Track git changes: `git log --oneline kubernetes/secrets/`
 
-# Track changes
-git log --oneline kubernetes/secrets/
-```
+See `kubernetes/secrets/` for audit and compliance records.

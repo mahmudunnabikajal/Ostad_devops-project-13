@@ -41,37 +41,40 @@ Excludes unnecessary files from Docker build context:
 
 ## Docker Compose
 
-Local development setup with three services:
+Local development with three services:
 
 1. **Frontend** - Nginx on port 80
 2. **Backend** - Express on port 3000
 3. **Database** - PostgreSQL on port 5432
 
-### Running Locally
+Use: `docker-compose.yml`
 
-```bash
-docker-compose up -d
-# Access frontend at http://localhost
-# Access backend API at http://localhost:3000/api
-# Database at localhost:5432
-```
+Access:
+
+- Frontend: http://localhost
+- Backend API: http://localhost:3000/api
+- Database: localhost:5432
 
 ## CI/CD Integration
 
-Both frontend and backend workflows now include Docker build and push:
+GitHub Actions automatically builds and pushes Docker images:
 
-1. **Build:** `docker build -t image:SHA .`
-2. **Tag:** Latest tag for convenience
-3. **Login:** Docker Hub authentication with DOCKER_TOKEN
-4. **Push:** Both SHA-tagged and latest versions
+**Build Process**:
 
-### Triggering Builds
+1. Build Docker image with commit SHA tag
+2. Tag latest version
+3. Authenticate with Docker Hub
+4. Push both SHA-tagged and latest versions
 
-- Frontend builds on changes to `app/frontend/**`
-- Backend builds on changes to `app/backend/**`
+**Triggers**:
+
+- Frontend: Changes to `app/frontend/**`
+- Backend: Changes to `app/backend/**`
 - Only pushes on main branch (not on PRs)
 
 ## Image Naming
 
-- Frontend: `mahmudunnabikajal/bmi-frontend:SHA` and `:latest`
-- Backend: `mahmudunnabikajal/bmi-backend:SHA` and `:latest`
+- Frontend: `mahmudunnabikajal/bmi-frontend:<SHA>` and `:latest`
+- Backend: `mahmudunnabikajal/bmi-backend:<SHA>` and `:latest`
+
+See: `.github/workflows/` for workflow files
