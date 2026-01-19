@@ -11,4 +11,5 @@ node_modules
 !Docker_Containerization.md
 !Kubernetes_Architecture.md
 !Secret_Management.md
+!Monitoring_Setup.md
 !Readme.md

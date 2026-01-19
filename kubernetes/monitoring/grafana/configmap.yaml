@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  prometheus-datasource.json: |
+    {
+      "apiVersion": 1,
+      "datasources": [
+        {
+          "name": "Prometheus",
+          "type": "prometheus",
+          "access": "proxy",
+          "url": "http://prometheus:9090",
+          "isDefault": true,
+          "editable": true
+        }
+      ]
+    }
+  loki-datasource.json: |
+    {
+      "apiVersion": 1,
+      "datasources": [
+        {
+          "name": "Loki",
+          "type": "loki",
+          "access": "proxy",
+          "url": "http://loki:3100",
+          "isDefault": false,
+          "editable": true
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: monitoring
+data:
+  grafana.ini: |
+    [auth]
+    disable_login_form = false
+
+    [auth.anonymous]
+    enabled = true
+    org_role = Viewer
+
+    [paths]
+    data = /var/lib/grafana
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+
+    [server]
+    domain = localhost
+    root_url = http://localhost:3000
+
+    [security]
+    admin_user = admin
+    admin_password = admin
+
+    [users]
+    allow_sign_up = true

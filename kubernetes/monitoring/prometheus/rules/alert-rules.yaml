@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  alert-rules.yaml: |
+    groups:
+      - name: application-alerts
+        interval: 30s
+        rules:
+          # Backend service alerts
+          - alert: BackendServiceDown
+            expr: up{job="backend"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: backend
+            annotations:
+              summary: "Backend service is down"
+              description: "Backend service has been unreachable for more than 2 minutes"
+
+          - alert: BackendHighErrorRate
+            expr: rate(http_requests_total{job="backend", status=~"5.."}[5m]) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              component: backend
+            annotations:
+              summary: "Backend high error rate detected"
+              description: "Backend error rate is above 5% for 5 minutes"
+
+          - alert: BackendHighResponseTime
+            expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="backend"}[5m])) > 1
+            for: 5m
+            labels:
+              severity: warning
+              component: backend
+            annotations:
+              summary: "Backend high response time"
+              description: "95th percentile response time is above 1 second"
+
+          # Frontend service alerts
+          - alert: FrontendServiceDown
+            expr: up{job="frontend"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: frontend
+            annotations:
+              summary: "Frontend service is down"
+              description: "Frontend service has been unreachable for more than 2 minutes"
+
+          # PostgreSQL alerts
+          - alert: PostgreSQLDown
+            expr: up{job="postgresql"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              component: postgresql
+            annotations:
+              summary: "PostgreSQL database is down"
+              description: "PostgreSQL has been unreachable for more than 1 minute"
+
+          - alert: PostgreSQLHighConnections
+            expr: pg_stat_activity_count > 90
+            for: 5m
+            labels:
+              severity: warning
+              component: postgresql
+            annotations:
+              summary: "PostgreSQL high connection count"
+              description: "PostgreSQL has more than 90 active connections"
+
+          - alert: PostgreSQLSlowQueries
+            expr: pg_slow_queries > 10
+            for: 5m
+            labels:
+              severity: warning
+              component: postgresql
+            annotations:
+              summary: "PostgreSQL slow queries detected"
+              description: "Multiple slow queries detected in PostgreSQL"
+
+          # Redis alerts
+          - alert: RedisDown
+            expr: up{job="redis"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              component: redis
+            annotations:
+              summary: "Redis is down"
+              description: "Redis has been unreachable for more than 1 minute"
+
+          - alert: RedisHighMemoryUsage
+            expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+            for: 5m
+            labels:
+              severity: warning
+              component: redis
+            annotations:
+              summary: "Redis high memory usage"
+              description: "Redis memory usage is above 90%"
+
+          # Kubernetes pod alerts
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Pod crash looping"
+              description: "Pod {{ $labels.pod }} is crashing and restarting"
+
+          - alert: PodNotHealthy
+            expr: min_over_time(sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"})[15m:1m]) > 0
+            for: 15m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Pod not healthy"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in a non-healthy state"
+
+          # Node alerts
+          - alert: NodeNotReady
+            expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+            for: 5m
+            labels:
+              severity: critical
+              component: kubernetes
+            annotations:
+              summary: "Node not ready"
+              description: "Node {{ $labels.node }} is not in Ready state"
+
+          - alert: NodeHighCPUUsage
+            expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+            for: 10m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Node high CPU usage"
+              description: "Node {{ $labels.instance }} CPU usage is above 80%"
+
+          - alert: NodeHighMemoryUsage
+            expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+            for: 10m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Node high memory usage"
+              description: "Node {{ $labels.instance }} memory usage is above 85%"
+
+          - alert: NodeDiskSpaceLow
+            expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lowerfs"} / node_filesystem_size_bytes < 0.1)
+            for: 10m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Node disk space low"
+              description: "Node {{ $labels.instance }} has less than 10% disk space available"
