@@ -9,4 +9,5 @@ node_modules
 
 !CI_CD_Setup.md
 !Docker_Containerization.md
+!Kubernetes_Architecture.md
 !Readme.md

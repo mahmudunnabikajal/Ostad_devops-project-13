@@ -75,9 +75,3 @@ Both frontend and backend workflows now include Docker build and push:
 
 - Frontend: `mahmudunnabikajal/bmi-frontend:SHA` and `:latest`
 - Backend: `mahmudunnabikajal/bmi-backend:SHA` and `:latest`
-
-## Next Steps
-
-- Monitor Docker Hub for successful pushes
-- Pull images for deployment to Kubernetes (Phase 3)
-- Set up automated cleanup for old images
